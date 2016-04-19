@@ -1,6 +1,4 @@
-/*
- * Created 06/20/2015 by Xin Yuan for the COP5570 class
- */
+
 
 #include <omp.h>
 #include <stdio.h>
@@ -22,20 +20,14 @@ void init1(int X, int Y)
   int i, j;
   w_X = X,  w_Y = Y;
 
-
-//    #pragma omp parallel for schedule (static)
     for (i=0; i<w_X;i++)
       for (j=0; j<w_Y; j++)
         w[j][i] = 0;
 
-//  #pragma omp parallel shared (w_X, w_Y) private (i)
-  {
-
     for (i=0; i<w_X; i++) w[0][i] = 1;
 
-
     for (i=0; i<w_Y; i++) w[i][0] = 1;
-  }
+
 }
 
 void test_init2()
@@ -44,7 +36,7 @@ void test_init2()
   w_X = 4;
   w_Y = 6;
 
-//  #pragma omp parallel for private(i, j) shared(w, w_X, w_Y)
+
   for (i=0; i<w_X;i++)
     for (j=0; j<w_Y; j++)
       w[j][i] = 0;
@@ -119,6 +111,7 @@ int main(int argc, char *argv[])
   int c;
   int init_count;
   int count;
+  int chunk;
 
   if (argc == 1) {
     printf("Usage: ./a.out w_X w_Y\n");
@@ -129,9 +122,10 @@ int main(int argc, char *argv[])
     init1(atoi(argv[1]), atoi(argv[2]));
 
   c = 0;
-//  #pragma omp parallel for reduction(+:c) shared(w, w_X, w_Y) private(x, y)
+
   for (x=0; x<w_X; x++) {
-    for (y=0; y<w_Y; y++) {
+
+	for (y=0; y<w_Y; y++) {
       c += (w[y][x] == 1);
     }
   }
@@ -142,35 +136,80 @@ int main(int argc, char *argv[])
   printf("initial world, population count: %d\n", c);
   if (DEBUG_LEVEL > 10) print_world();
 
-//  #pragma omp parallel for
+
+
+
   for (iter = 0; (iter < 200) && (count <50*init_count) &&
 	 (count > init_count / 50); iter ++) {
 
-//  #pragma omp parallel for
+	count = 0;
+/********************************************************************
+*
+*  This is the region that will be made parallel, as
+*   it represents one iteration in the GOL.
+*  The GOL grid will be divided up so threads can
+*   create the new grid concurrently.
+*
+********************************************************************/
+#pragma omp parallel shared(w, w_X, w_Y, neww, count)
+{
+
+	omp_set_num_threads(12);
+	chunk = w_X / omp_get_num_threads();
+
+	/* initialize new world by analyzing old world */
+	#pragma omp for private(x, y, c) schedule(static, chunk)
     for (x=0; x < w_X; x++) {
-      for (y=0; y<w_Y; y++) {
-        c = neighborcount(x, y);  /* count neighbors */
-        if (c <= 1) neww[y][x] = 0;      /* die of loneliness */
-        else if (c >=4) neww[y][x] = 0;  /* die of overpopulation */
-        else if (c == 3)  neww[y][x] = 1;             /* becomes alive */
-	else neww[y][x] = w[y][x];   /* c == 2, no change */
-      }
+
+		for (y=0; y<w_Y; y++) {
+
+			c = neighborcount(x, y);     /* count neighbors */
+
+			if 		(c <= 1)
+				neww[y][x] = 0;        /* die of loneliness */
+			else if (c >=4)
+				neww[y][x] = 0;    /* die of overpopulation */
+			else if (c == 3)
+				neww[y][x] = 1;            /* becomes alive */
+			else
+				neww[y][x] = w[y][x];  /* c == 2, no change */
+
+		}
     }
 
     /* copy the world, and count the current lives */
-    count = 0;
-//  #pragma omp parallel for
-    for (x=0; x<w_X; x++) {
-      for (y=0; y<w_Y; y++) {
-	w[y][x] = neww[y][x];
-	if (w[y][x] == 1) count++;
-      }
-    }
-    printf("iter = %d, population count = %d\n", iter, count);
+	#pragma omp for private(x, y, c) reduction(+:count) schedule(static, chunk)
+	for (x=0; x<w_X; x++) {
+
+		for (y=0; y<w_Y; y++) {
+
+			w[y][x] = neww[y][x];
+
+			count += (w[y][x] == 1);
+
+		}
+	}
+}
+/********************************************************************
+*
+*  End parallel region
+*
+********************************************************************/
+
+	printf("iter = %d, population count = %d\n", iter, count);
     if (DEBUG_LEVEL > 10) print_world();
+
+
   }
 
-//  #pragma omp parallel for
+
+
+
+
+
+
+
+
   {
     FILE *fd;
     if ((fd = fopen("final_world000.txt", "w")) != NULL) {
