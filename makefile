@@ -8,15 +8,20 @@
 ###########################################################
 
 CC = gcc -ansi -std=c99
-CCFLAGS = -Wall -pedantic -O3 -fopenmp
-PRGS := $(patsubst %.c,%,$(wildcard *.c))
+CCFLAGS = -Wall -pedantic -O3
 
-all : $(PRGS)
+all : gol_omp gol_thd gol_prc
 
-% : %.c
-	$(CC) $(CCFLAGS) $@.c -o $@
+gol_omp : gol_omp.c
+	$(CC) $(CCFLAGS) -fopenmp gol_omp.c -o gol_omp
+
+gol_thd : gol_thd.c
+	$(CC) $(CCFLAGS) -lpthread gol_thd.c -o gol_thd
+
+gol_prc : gol_prc.c
+	$(CC) $(CCFLAGS) gol_prc.c -o gol_prc
 
 .SUFFIXES :
 
 clean :
-	rm $(PRGS)
+	rm gol_omp gol_thd gol_prc
