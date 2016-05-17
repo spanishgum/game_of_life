@@ -1,4 +1,5 @@
 import sys, threading
+from multiprocessing.pool import ThreadPool as TP
 
 class gol:
     def __init__(self, x, y, n):
@@ -21,22 +22,38 @@ class gol:
             self.out.write('\n')
     
     def iter(self):
+        tpool = TP(self.n_thds)
         beg, end, count = 0, 0, 0
-        thd_dat = [None] * self.n_thds
+        thd_dat = []
         for i in range(self.n_thds):
-            thd_dat[i] = { 'beg' : beg, 'cells' : self.cells_per_thd, 'id' : None }
+            thd_dat.append({ 'beg' : beg, 'cells' : self.cells_per_thd, 'id' : None })
             if i < self.xtra_cells:
                 beg += 1
-                thd_dat[i]['cells'] += 1
-            thd_dat[i]['id'] = threading.Thread(target = self.calculate, args = (thd_dat[i],))
-            thd_dat[i]['id'].start()
-        for i in range(self.n_thds):
-            thd_dat[i]['id'].join()
-        for i in range(self.n_thds):
-            thd_dat[i]['id'] = threading.Thread(target = self.update, args = (thd_dat[i],))
-            thd_dat[i]['id'].start()
-        for i in range(self.n_thds):
-            thd_dat[i]['id'].join()
+                thd_dat[-1]['cells'] += 1
+        tpool.map(self.calculate, thd_dat)
+        tpool.close()
+        tpool.join()
+        tpool.map(self.update, thd_dat)
+        tpool.close()
+        tpool.join()
+        
+    # def iter(self):
+        # beg, end, count = 0, 0, 0
+        # thd_dat = [None] * self.n_thds
+        # for i in range(self.n_thds):
+            # thd_dat[i] = { 'beg' : beg, 'cells' : self.cells_per_thd, 'id' : None }
+            # if i < self.xtra_cells:
+                # beg += 1
+                # thd_dat[i]['cells'] += 1
+            # thd_dat[i]['id'] = threading.Thread(target = self.calculate, args = (thd_dat[i],))
+            # thd_dat[i]['id'].start()
+        # for i in range(self.n_thds):
+            # thd_dat[i]['id'].join()
+        # for i in range(self.n_thds):
+            # thd_dat[i]['id'] = threading.Thread(target = self.update, args = (thd_dat[i],))
+            # thd_dat[i]['id'].start()
+        # for i in range(self.n_thds):
+            # thd_dat[i]['id'].join()
 
     def ncount(x, y):
         g = self.grid
